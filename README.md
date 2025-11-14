@@ -1,0 +1,1 @@
+This is a cross-platform network packet analyzer written in C++ that captures and analyzes network packets on both Windows and Linux/Unix systems. It allows you to capture raw packets and filter them based on different criteria like protocol, IP address, and port number. It provides detailed information about the Ethernet, IP, TCP, UDP, and ICMP headers.
