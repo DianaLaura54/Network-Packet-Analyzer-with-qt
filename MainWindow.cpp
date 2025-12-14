@@ -14,21 +14,16 @@ MainWindow::MainWindow(QWidget *parent)
 
     model = new PacketTableModel(this);
     capture = new PacketCapture(this);
-
     setupUI();
-
-
     connect(capture, &PacketCapture::packetCaptured, this, &MainWindow::onPacketCaptured);
     connect(capture, &PacketCapture::captureError, this, &MainWindow::onCaptureError);
     connect(capture, &PacketCapture::captureStarted, this, &MainWindow::onCaptureStarted);
     connect(capture, &PacketCapture::captureStopped, this, &MainWindow::onCaptureStopped);
-
     connect(startButton, &QPushButton::clicked, this, &MainWindow::onStartCapture);
     connect(stopButton, &QPushButton::clicked, this, &MainWindow::onStopCapture);
     connect(clearButton, &QPushButton::clicked, this, &MainWindow::onClearPackets);
     connect(applyFilterButton, &QPushButton::clicked, this, &MainWindow::onApplyFilter);
     connect(packetTable, &QTableView::clicked, this, &MainWindow::onPacketSelected);
-
     stopButton->setEnabled(false);
 }
 
@@ -178,8 +173,6 @@ void MainWindow::onPacketCaptured(const PacketInfo& packet) {
     else if (packet.protocol == "ICMP") icmpCount++;
 
     updateStatusBar();
-
-    // Auto-scroll to bottom
     packetTable->scrollToBottom();
 }
 
@@ -188,11 +181,7 @@ void MainWindow::onPacketSelected(const QModelIndex& index) {
         return;
 
     const PacketInfo& packet = model->getPacket(index.row());
-
-    // Update details view
     detailsView->setHtml(formatPacketDetails(packet));
-
-    // Update hex view
     hexView->setPlainText(formatHexDump(packet.raw_data));
 }
 
@@ -282,19 +271,14 @@ QString MainWindow::formatPacketDetails(const PacketInfo& packet) {
             html += "<b>Flags:</b> " + QString::fromStdString(packet.flags) + "<br>";
         }
     }
-
     html += "</body></html>";
     return html;
 }
 
 QString MainWindow::formatHexDump(const std::vector<uint8_t>& data) {
     std::stringstream ss;
-
     for (size_t i = 0; i < data.size(); i += 16) {
-
         ss << std::setfill('0') << std::setw(4) << std::hex << i << "  ";
-
-
         for (size_t j = 0; j < 16; j++) {
             if (i + j < data.size()) {
                 ss << std::setfill('0') << std::setw(2) << std::hex
@@ -302,20 +286,14 @@ QString MainWindow::formatHexDump(const std::vector<uint8_t>& data) {
             } else {
                 ss << "   ";
             }
-
             if (j == 7) ss << " ";
         }
-
         ss << " ";
-
-
         for (size_t j = 0; j < 16 && i + j < data.size(); j++) {
             unsigned char c = data[i + j];
             ss << (c >= 32 && c <= 126 ? static_cast<char>(c) : '.');
         }
-
         ss << "\n";
     }
-
     return QString::fromStdString(ss.str());
 }

@@ -250,7 +250,7 @@ PacketInfo PacketCapture::parsePacket(unsigned char* buffer, int size) {
             packet.protocol = "TCP";
             struct tcphdr *tcph = (struct tcphdr*)(buffer + sizeof(struct ethhdr) + iphdr_len);
             packet.source_port = ntohs(tcph->source);
-            packet.dest_port = ntohs(tcph->dest);
+            packet.dest_port = ntohs(tcph->dest); //network to host
 
             // TCP flags
             std::string flags;

@@ -23,4 +23,4 @@ struct PacketInfo {
     PacketInfo() : number(0), length(0), ttl(0), source_port(0), dest_port(0) {}
 };
 
-#endif // PACKETINFO_H
+#endif
