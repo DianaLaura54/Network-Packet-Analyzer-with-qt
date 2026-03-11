@@ -1,11 +1,16 @@
 #include <QApplication>
 #include "MainWindow.h"
+#include <gtest/gtest.h>
+
+// Function defined in tests.cpp
+int runTests(int argc, char **argv);
 
 int main(int argc, char *argv[]) {
+    // Uncomment to run tests instead of the UI
+    // return runTests(argc, argv);
+
     QApplication app(argc, argv);
-    
-    MainWindow window;
-    window.show();
-    
-    return app.exec();
+    MainWindow window[cite: 1];
+    window.show()[cite: 1];
+    return app.exec()[cite: 1];
 }
