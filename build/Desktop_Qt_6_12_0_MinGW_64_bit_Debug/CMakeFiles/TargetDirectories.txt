@@ -1,0 +1,9 @@
+D:/AN 4/Network-Packet-Analyzer-with-qt/build/Desktop_Qt_6_12_0_MinGW_64_bit_Debug/CMakeFiles/PacketAnalyzer.dir
+D:/AN 4/Network-Packet-Analyzer-with-qt/build/Desktop_Qt_6_12_0_MinGW_64_bit_Debug/CMakeFiles/edit_cache.dir
+D:/AN 4/Network-Packet-Analyzer-with-qt/build/Desktop_Qt_6_12_0_MinGW_64_bit_Debug/CMakeFiles/rebuild_cache.dir
+D:/AN 4/Network-Packet-Analyzer-with-qt/build/Desktop_Qt_6_12_0_MinGW_64_bit_Debug/CMakeFiles/list_install_components.dir
+D:/AN 4/Network-Packet-Analyzer-with-qt/build/Desktop_Qt_6_12_0_MinGW_64_bit_Debug/CMakeFiles/install.dir
+D:/AN 4/Network-Packet-Analyzer-with-qt/build/Desktop_Qt_6_12_0_MinGW_64_bit_Debug/CMakeFiles/install/local.dir
+D:/AN 4/Network-Packet-Analyzer-with-qt/build/Desktop_Qt_6_12_0_MinGW_64_bit_Debug/CMakeFiles/install/strip.dir
+D:/AN 4/Network-Packet-Analyzer-with-qt/build/Desktop_Qt_6_12_0_MinGW_64_bit_Debug/CMakeFiles/PacketAnalyzer_autogen_timestamp_deps.dir
+D:/AN 4/Network-Packet-Analyzer-with-qt/build/Desktop_Qt_6_12_0_MinGW_64_bit_Debug/CMakeFiles/PacketAnalyzer_autogen.dir

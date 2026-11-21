@@ -4,74 +4,76 @@
 #include <chrono>
 #include <sstream>
 #include <iomanip>
+#include <vector>
+#include <cerrno>
 
 #ifdef _WIN32
-    #pragma comment(lib, "ws2_32.lib")
+#pragma comment(lib, "ws2_32.lib")
 
-    struct ethhdr {
-        unsigned char h_dest[6];
-        unsigned char h_source[6];
-        unsigned short h_proto;
-    };
+struct ethhdr {
+    unsigned char h_dest[6];
+    unsigned char h_source[6];
+    unsigned short h_proto;
+};
 
-    struct iphdr {
-        unsigned char ihl:4;
-        unsigned char version:4;
-        unsigned char tos;
-        unsigned short tot_len;
-        unsigned short id;
-        unsigned short frag_off;
-        unsigned char ttl;
-        unsigned char protocol;
-        unsigned short check;
-        unsigned int saddr;
-        unsigned int daddr;
-    };
+struct iphdr {
+    unsigned char ihl:4;
+    unsigned char version:4;
+    unsigned char tos;
+    unsigned short tot_len;
+    unsigned short id;
+    unsigned short frag_off;
+    unsigned char ttl;
+    unsigned char protocol;
+    unsigned short check;
+    unsigned int saddr;
+    unsigned int daddr;
+};
 
-    struct tcphdr {
-        unsigned short source;
-        unsigned short dest;
-        unsigned int seq;
-        unsigned int ack_seq;
-        unsigned short res1:4;
-        unsigned short doff:4;
-        unsigned short fin:1;
-        unsigned short syn:1;
-        unsigned short rst:1;
-        unsigned short psh:1;
-        unsigned short ack:1;
-        unsigned short urg:1;
-        unsigned short res2:2;
-        unsigned short window;
-        unsigned short check;
-        unsigned short urg_ptr;
-    };
+struct tcphdr {
+    unsigned short source;
+    unsigned short dest;
+    unsigned int seq;
+    unsigned int ack_seq;
+    unsigned short res1:4;
+    unsigned short doff:4;
+    unsigned short fin:1;
+    unsigned short syn:1;
+    unsigned short rst:1;
+    unsigned short psh:1;
+    unsigned short ack:1;
+    unsigned short urg:1;
+    unsigned short res2:2;
+    unsigned short window;
+    unsigned short check;
+    unsigned short urg_ptr;
+};
 
-    struct udphdr {
-        unsigned short source;
-        unsigned short dest;
-        unsigned short len;
-        unsigned short check;
-    };
+struct udphdr {
+    unsigned short source;
+    unsigned short dest;
+    unsigned short len;
+    unsigned short check;
+};
 
-    struct icmphdr {
-        unsigned char type;
-        unsigned char code;
-        unsigned short checksum;
-    };
+struct icmphdr {
+    unsigned char type;
+    unsigned char code;
+    unsigned short checksum;
+};
 
-    #define IPPROTO_ICMP 1
-    #define IPPROTO_TCP 6
-    #define IPPROTO_UDP 17
+#define IPPROTO_ICMP 1
+#define IPPROTO_TCP 6
+#define IPPROTO_UDP 17
 #else
-    #include <arpa/inet.h>
-    #include <netinet/in.h>
-    #include <netinet/ip.h>
-    #include <netinet/tcp.h>
-    #include <netinet/udp.h>
-    #include <netinet/ip_icmp.h>
-    #include <netinet/if_ether.h>
-    #include <unistd.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <netinet/tcp.h>
+#include <netinet/udp.h>
+#include <netinet/ip_icmp.h>
+#include <netinet/if_ether.h>
+#include <unistd.h>
 #endif
 
 PacketCapture::PacketCapture(QObject *parent)
@@ -94,6 +96,7 @@ void PacketCapture::stopCapture() {
 }
 
 void PacketCapture::setFilter(const std::string& filter) {
+    QMutexLocker locker(&filterMutex);
     currentFilter = filter;
 }
 
@@ -102,18 +105,24 @@ void PacketCapture::run() {
     packetNumber = 0;
 
     if (!initializeSocket()) {
-        emit captureError("Failed to initialize socket. On Linux, run with sudo!");
+        emit captureError("Failed to initialize socket. On Windows, run as Administrator; on Linux, run with sudo!");
         return;
     }
 
     emit captureStarted();
 
-    unsigned char buffer[65536];
+    // Extra room for the fake Ethernet header added on Windows
+    static const int MAX_PACKET = 65536;
+    std::vector<unsigned char> storage(MAX_PACKET + sizeof(struct ethhdr));
+    unsigned char *buffer = storage.data();
 
     while (running) {
 #ifdef _WIN32
-        int data_size = recv(sock, (char*)buffer, 65536, 0);
+        int data_size = recv(sock, (char*)buffer, MAX_PACKET, 0);
         if (data_size == SOCKET_ERROR) {
+            if (WSAGetLastError() == WSAETIMEDOUT) {
+                continue; // no traffic; loop to re-check 'running'
+            }
             if (running) {
                 emit captureError(QString("Socket error: %1").arg(WSAGetLastError()));
             }
@@ -127,8 +136,11 @@ void PacketCapture::run() {
         eth->h_proto = htons(0x0800); // IP protocol
         data_size += sizeof(struct ethhdr);
 #else
-        ssize_t data_size = recvfrom(sock, buffer, 65536, 0, NULL, NULL);
+        ssize_t data_size = recvfrom(sock, buffer, MAX_PACKET, 0, NULL, NULL);
         if (data_size < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+                continue; // timeout; loop to re-check 'running'
+            }
             if (running) {
                 emit captureError("Error receiving packet");
             }
@@ -145,11 +157,10 @@ void PacketCapture::run() {
                 emit packetCaptured(packet);
             }
         }
-
-        // Small delay to prevent overwhelming the GUI
-        QThread::msleep(1);
+        // No sleep here: recv() blocks, and the GUI batches updates itself
     }
 
+    closeSocket();
     emit captureStopped();
 }
 
@@ -196,11 +207,20 @@ bool PacketCapture::initializeSocket() {
         WSACleanup();
         return false;
     }
+
+    // Wake up every 500 ms even with no traffic, so Stop works immediately
+    DWORD timeoutMs = 500;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeoutMs, sizeof(timeoutMs));
 #else
     sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
     if (sock < 0) {
         return false;
     }
+
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = 500000;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 #endif
 
     return true;
@@ -246,57 +266,63 @@ PacketInfo PacketCapture::parsePacket(unsigned char* buffer, int size) {
 
     // Determine protocol
     switch (iph->protocol) {
-        case IPPROTO_TCP: {
-            packet.protocol = "TCP";
-            struct tcphdr *tcph = (struct tcphdr*)(buffer + sizeof(struct ethhdr) + iphdr_len);
-            packet.source_port = ntohs(tcph->source);
-            packet.dest_port = ntohs(tcph->dest); //network to host
+    case IPPROTO_TCP: {
+        packet.protocol = "TCP";
+        struct tcphdr *tcph = (struct tcphdr*)(buffer + sizeof(struct ethhdr) + iphdr_len);
+        packet.source_port = ntohs(tcph->source);
+        packet.dest_port = ntohs(tcph->dest); //network to host
 
-            // TCP flags
-            std::string flags;
-            if (tcph->fin) flags += "FIN ";
-            if (tcph->syn) flags += "SYN ";
-            if (tcph->rst) flags += "RST ";
-            if (tcph->psh) flags += "PSH ";
-            if (tcph->ack) flags += "ACK ";
-            if (tcph->urg) flags += "URG ";
-            packet.flags = flags;
-            break;
-        }
-        case IPPROTO_UDP: {
-            packet.protocol = "UDP";
-            struct udphdr *udph = (struct udphdr*)(buffer + sizeof(struct ethhdr) + iphdr_len);
-            packet.source_port = ntohs(udph->source);
-            packet.dest_port = ntohs(udph->dest);
-            break;
-        }
-        case IPPROTO_ICMP: {
-            packet.protocol = "ICMP";
-            struct icmphdr *icmph = (struct icmphdr*)(buffer + sizeof(struct ethhdr) + iphdr_len);
-            packet.source_port = icmph->type;
-            packet.dest_port = icmph->code;
-            break;
-        }
-        default:
-            packet.protocol = "Other (" + std::to_string(iph->protocol) + ")";
-            break;
+        // TCP flags
+        std::string flags;
+        if (tcph->fin) flags += "FIN ";
+        if (tcph->syn) flags += "SYN ";
+        if (tcph->rst) flags += "RST ";
+        if (tcph->psh) flags += "PSH ";
+        if (tcph->ack) flags += "ACK ";
+        if (tcph->urg) flags += "URG ";
+        packet.flags = flags;
+        break;
+    }
+    case IPPROTO_UDP: {
+        packet.protocol = "UDP";
+        struct udphdr *udph = (struct udphdr*)(buffer + sizeof(struct ethhdr) + iphdr_len);
+        packet.source_port = ntohs(udph->source);
+        packet.dest_port = ntohs(udph->dest);
+        break;
+    }
+    case IPPROTO_ICMP: {
+        packet.protocol = "ICMP";
+        struct icmphdr *icmph = (struct icmphdr*)(buffer + sizeof(struct ethhdr) + iphdr_len);
+        packet.source_port = icmph->type;
+        packet.dest_port = icmph->code;
+        break;
+    }
+    default:
+        packet.protocol = "Other (" + std::to_string(iph->protocol) + ")";
+        break;
     }
 
     return packet;
 }
 
 bool PacketCapture::matchesFilter(const PacketInfo& packet) {
-    if (currentFilter.empty()) {
+    std::string filter;
+    {
+        QMutexLocker locker(&filterMutex);
+        filter = currentFilter;
+    }
+
+    if (filter.empty()) {
         return true;
     }
 
-    size_t pos = currentFilter.find('=');
+    size_t pos = filter.find('=');
     if (pos == std::string::npos) {
         return true;
     }
 
-    std::string key = currentFilter.substr(0, pos);
-    std::string value = currentFilter.substr(pos + 1);
+    std::string key = filter.substr(0, pos);
+    std::string value = filter.substr(pos + 1);
 
     if (key == "protocol") {
         std::string proto_lower = packet.protocol;
@@ -307,7 +333,12 @@ bool PacketCapture::matchesFilter(const PacketInfo& packet) {
     } else if (key == "dst") {
         return packet.dest_ip == value;
     } else if (key == "port") {
-        int port = std::stoi(value);
+        int port;
+        try {
+            port = std::stoi(value);
+        } catch (...) {
+            return false; // non-numeric port: match nothing instead of crashing
+        }
         return packet.source_port == port || packet.dest_port == port;
     }
 

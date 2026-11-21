@@ -8,6 +8,8 @@
 #include <QLabel>
 #include <QComboBox>
 #include <QLineEdit>
+#include <QTimer>
+#include <QVector>
 #include "PacketTableModel.h"
 #include "PacketCapture.h"
 
@@ -28,6 +30,7 @@ private slots:
     void onCaptureStarted();
     void onCaptureStopped();
     void onApplyFilter();
+    void flushPendingPackets();
 
 private:
     void setupUI();
@@ -50,6 +53,10 @@ private:
     // Data
     PacketTableModel *model;
     PacketCapture *capture;
+
+    // Packets waiting to be shown; flushed to the table by flushTimer
+    QVector<PacketInfo> pending;
+    QTimer *flushTimer;
 
     // Statistics
     int totalPackets;

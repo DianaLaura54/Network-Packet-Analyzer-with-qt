@@ -25,6 +25,12 @@ MainWindow::MainWindow(QWidget *parent)
     connect(applyFilterButton, &QPushButton::clicked, this, &MainWindow::onApplyFilter);
     connect(packetTable, &QTableView::clicked, this, &MainWindow::onPacketSelected);
     stopButton->setEnabled(false);
+
+    // Update the table ~10 times per second instead of once per packet
+    flushTimer = new QTimer(this);
+    flushTimer->setInterval(100);
+    connect(flushTimer, &QTimer::timeout, this, &MainWindow::flushPendingPackets);
+    flushTimer->start();
 }
 
 MainWindow::~MainWindow() {
@@ -154,6 +160,7 @@ void MainWindow::onStopCapture() {
 }
 
 void MainWindow::onClearPackets() {
+    pending.clear();
     model->clearPackets();
     detailsView->clear();
     hexView->clear();
@@ -165,15 +172,27 @@ void MainWindow::onClearPackets() {
 }
 
 void MainWindow::onPacketCaptured(const PacketInfo& packet) {
-    model->addPacket(packet);
+    // Only store the packet here; the timer does the (expensive) UI work
+    pending.append(packet);
     totalPackets++;
 
     if (packet.protocol == "TCP") tcpCount++;
     else if (packet.protocol == "UDP") udpCount++;
     else if (packet.protocol == "ICMP") icmpCount++;
+}
+
+void MainWindow::flushPendingPackets() {
+    if (pending.isEmpty())
+        return;
+
+    model->addPackets(pending);
+    pending.clear();
 
     updateStatusBar();
-    packetTable->scrollToBottom();
+
+    // Only auto-scroll if no packet is selected, so the user can inspect one
+    if (!packetTable->selectionModel()->hasSelection())
+        packetTable->scrollToBottom();
 }
 
 void MainWindow::onPacketSelected(const QModelIndex& index) {
@@ -195,6 +214,7 @@ void MainWindow::onCaptureStarted() {
 }
 
 void MainWindow::onCaptureStopped() {
+    flushPendingPackets();
     startButton->setEnabled(true);
     stopButton->setEnabled(false);
     filterTypeCombo->setEnabled(true);
@@ -230,10 +250,10 @@ void MainWindow::onApplyFilter() {
 
 void MainWindow::updateStatusBar() {
     QString status = QString("Total: %1 | TCP: %2 | UDP: %3 | ICMP: %4")
-                        .arg(totalPackets)
-                        .arg(tcpCount)
-                        .arg(udpCount)
-                        .arg(icmpCount);
+    .arg(totalPackets)
+        .arg(tcpCount)
+        .arg(udpCount)
+        .arg(icmpCount);
 
     if (capture->isRunning()) {
         status = "Capturing... | " + status;

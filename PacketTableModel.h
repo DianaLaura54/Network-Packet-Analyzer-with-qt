@@ -3,6 +3,7 @@
 
 #include <QAbstractTableModel>
 #include <vector>
+#include <QVector>
 #include "PacketInfo.h"
 
 class PacketTableModel : public QAbstractTableModel {
@@ -17,10 +18,14 @@ public:
     QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
 
     void addPacket(const PacketInfo& packet);
+    void addPackets(const QVector<PacketInfo>& batch);
     void clearPackets();
     const PacketInfo& getPacket(int row) const;
 
 private:
+    void trimToLimit();
+
+    static const int MAX_ROWS = 20000; // oldest rows are dropped beyond this
     std::vector<PacketInfo> packets;
 };
 

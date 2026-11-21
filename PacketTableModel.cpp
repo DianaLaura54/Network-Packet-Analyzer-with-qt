@@ -26,18 +26,18 @@ QVariant PacketTableModel::data(const QModelIndex &index, int role) const {
 
     if (role == Qt::DisplayRole) {
         switch (index.column()) {
-            case 0: return packet.number;
-            case 1: return QString::fromStdString(packet.timestamp);
-            case 2: return QString::fromStdString(packet.source_ip);
-            case 3: return QString::fromStdString(packet.dest_ip);
-            case 4: return QString::fromStdString(packet.protocol);
-            case 5: return packet.length;
-            case 6: {
-                if (packet.protocol == "TCP" || packet.protocol == "UDP") {
-                    return QString("%1 → %2").arg(packet.source_port).arg(packet.dest_port);
-                }
-                return QString();
+        case 0: return packet.number;
+        case 1: return QString::fromStdString(packet.timestamp);
+        case 2: return QString::fromStdString(packet.source_ip);
+        case 3: return QString::fromStdString(packet.dest_ip);
+        case 4: return QString::fromStdString(packet.protocol);
+        case 5: return packet.length;
+        case 6: {
+            if (packet.protocol == "TCP" || packet.protocol == "UDP") {
+                return QString("%1 → %2").arg(packet.source_port).arg(packet.dest_port);
             }
+            return QString();
+        }
         }
     } else if (role == Qt::ForegroundRole) {
         if (index.column() == 4) { // Protocol column
@@ -56,13 +56,13 @@ QVariant PacketTableModel::data(const QModelIndex &index, int role) const {
 QVariant PacketTableModel::headerData(int section, Qt::Orientation orientation, int role) const {
     if (role == Qt::DisplayRole && orientation == Qt::Horizontal) {
         switch (section) {
-            case 0: return "No.";
-            case 1: return "Time";
-            case 2: return "Source";
-            case 3: return "Destination";
-            case 4: return "Protocol";
-            case 5: return "Length";
-            case 6: return "Info";
+        case 0: return "No.";
+        case 1: return "Time";
+        case 2: return "Source";
+        case 3: return "Destination";
+        case 4: return "Protocol";
+        case 5: return "Length";
+        case 6: return "Info";
         }
     }
     return QVariant();
@@ -72,6 +72,28 @@ void PacketTableModel::addPacket(const PacketInfo& packet) {
     beginInsertRows(QModelIndex(), packets.size(), packets.size());
     packets.push_back(packet);
     endInsertRows();
+    trimToLimit();
+}
+
+void PacketTableModel::addPackets(const QVector<PacketInfo>& batch) {
+    if (batch.isEmpty())
+        return;
+
+    const int first = static_cast<int>(packets.size());
+    beginInsertRows(QModelIndex(), first, first + batch.size() - 1);
+    packets.insert(packets.end(), batch.begin(), batch.end());
+    endInsertRows();
+    trimToLimit();
+}
+
+void PacketTableModel::trimToLimit() {
+    const int excess = static_cast<int>(packets.size()) - MAX_ROWS;
+    if (excess <= 0)
+        return;
+
+    beginRemoveRows(QModelIndex(), 0, excess - 1);
+    packets.erase(packets.begin(), packets.begin() + excess);
+    endRemoveRows();
 }
 
 void PacketTableModel::clearPackets() {

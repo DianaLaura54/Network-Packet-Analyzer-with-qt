@@ -3,17 +3,18 @@
 
 #include <QThread>
 #include <QString>
+#include <QMutex>
 #include <atomic>
 #include <string>
 #include "PacketInfo.h"
 
 #ifdef _WIN32
-    #define WIN32_LEAN_AND_MEAN
-    #include <winsock2.h>
-    #include <ws2tcpip.h>
-    #include <windows.h>
+#define WIN32_LEAN_AND_MEAN
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <windows.h>
 #else
-    #include <sys/socket.h>
+#include <sys/socket.h>
 #endif
 
 class PacketCapture : public QThread {
@@ -26,8 +27,8 @@ public:
     void stopCapture();
     void setFilter(const std::string& filter);
 
-    signals:
-        void packetCaptured(const PacketInfo& packet);
+signals:
+    void packetCaptured(const PacketInfo& packet);
     void captureError(const QString& error);
     void captureStarted();
     void captureStopped();
@@ -53,6 +54,7 @@ private:
 
     std::atomic<bool> running;
     std::string currentFilter;
+    QMutex filterMutex; // setFilter() is called from the GUI thread
     int packetNumber;
 };
 
