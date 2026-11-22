@@ -10,58 +10,69 @@
 #ifdef _WIN32
 #pragma comment(lib, "ws2_32.lib")
 
+// ===================== ETHERNET HEADER (14 bytes) — layer 2 =====================
+// Delivers the frame between devices on the same local network.
 struct ethhdr {
-    unsigned char h_dest[6];
-    unsigned char h_source[6];
-    unsigned short h_proto;
+    unsigned char  h_dest[6];    // Destination MAC address (who receives the frame)
+    unsigned char  h_source[6];  // Source MAC address (who sent the frame)
+    unsigned short h_proto;      // EtherType = what's inside: 0x0800 IPv4, 0x86DD IPv6, 0x0806 ARP
 };
 
+// ===================== IPv4 HEADER (20-60 bytes) — layer 3 ======================
+// Routes the packet across networks, from one IP address to another.
 struct iphdr {
-    unsigned char ihl:4;
-    unsigned char version:4;
-    unsigned char tos;
-    unsigned short tot_len;
-    unsigned short id;
-    unsigned short frag_off;
-    unsigned char ttl;
-    unsigned char protocol;
-    unsigned short check;
-    unsigned int saddr;
-    unsigned int daddr;
+    unsigned char  ihl:4;        // Header length in 4-byte words (5 = 20 bytes); x4 for bytes
+    unsigned char  version:4;    // IP version, always 4 here
+    // (ihl listed first because x86 stores the first bit-field in the low bits)
+    unsigned char  tos;          // Type of Service: priority / QoS marking
+    unsigned short tot_len;      // Total length of the packet in bytes (header + data)
+    unsigned short id;           // Identification: groups fragments of the same packet
+    unsigned short frag_off;     // Fragment flags (Don't Fragment, More Fragments) + offset
+    unsigned char  ttl;          // Time To Live: -1 at each router, dropped at 0 (Windows starts at 128, Linux at 64)
+    unsigned char  protocol;     // What's inside: 1 = ICMP, 6 = TCP, 17 = UDP
+    unsigned short check;        // Checksum of the IP header (detects corruption)
+    unsigned int   saddr;        // Source IP address
+    unsigned int   daddr;        // Destination IP address
 };
 
+// ===================== TCP HEADER (20-60 bytes) — layer 4 =======================
+// Reliable, ordered connection between two programs (web, SSH, email...).
 struct tcphdr {
-    unsigned short source;
-    unsigned short dest;
-    unsigned int seq;
-    unsigned int ack_seq;
-    unsigned short res1:4;
-    unsigned short doff:4;
-    unsigned short fin:1;
-    unsigned short syn:1;
-    unsigned short rst:1;
-    unsigned short psh:1;
-    unsigned short ack:1;
-    unsigned short urg:1;
-    unsigned short res2:2;
-    unsigned short window;
-    unsigned short check;
-    unsigned short urg_ptr;
+    unsigned short source;       // Source port (sender's program/connection)
+    unsigned short dest;         // Destination port (service: 80 HTTP, 443 HTTPS, 22 SSH)
+    unsigned int   seq;          // Sequence number: position of this data in the stream
+    unsigned int   ack_seq;      // Acknowledgment number: next byte expected from the other side
+    unsigned short res1:4;       // Reserved, unused
+    unsigned short doff:4;       // Data offset = TCP header length in 4-byte words (5 = 20 bytes)
+    unsigned short fin:1;        // FIN: sender is finished, close the connection
+    unsigned short syn:1;        // SYN: start a connection (handshake)
+    unsigned short rst:1;        // RST: abort the connection immediately
+    unsigned short psh:1;        // PSH: pass the data to the application right away
+    unsigned short ack:1;        // ACK: the ack_seq field is valid
+    unsigned short urg:1;        // URG: urgent data present (rarely used)
+    unsigned short res2:2;       // Reserved, unused
+    unsigned short window;       // Window size: how many bytes the receiver can accept now (flow control)
+    unsigned short check;        // Checksum of TCP header + data
+    unsigned short urg_ptr;      // Urgent pointer: end of urgent data, only if urg = 1
 };
 
+// ===================== UDP HEADER (8 bytes) — layer 4 ===========================
+// Fast, connectionless: no handshake, no ordering, no retransmission (DNS, video, games).
 struct udphdr {
-    unsigned short source;
-    unsigned short dest;
-    unsigned short len;
-    unsigned short check;
+    unsigned short source;       // Source port
+    unsigned short dest;         // Destination port (53 DNS, 67/68 DHCP, 123 NTP)
+    unsigned short len;          // Length of UDP header + data in bytes
+    unsigned short check;        // Checksum (optional in IPv4, 0 = not used)
 };
 
+// ===================== ICMP HEADER (4 bytes + data) =============================
+// Control and error messages for IP (ping, "unreachable", traceroute).
 struct icmphdr {
-    unsigned char type;
-    unsigned char code;
-    unsigned short checksum;
+    unsigned char  type;         // Message type: 8 Echo Request (ping), 0 Echo Reply,
+    //               3 Destination Unreachable, 11 Time Exceeded
+    unsigned char  code;         // Detail for the type (e.g. type 3: 0 net, 1 host, 3 port unreachable)
+    unsigned short checksum;     // Checksum of the ICMP message
 };
-
 #define IPPROTO_ICMP 1
 #define IPPROTO_TCP 6
 #define IPPROTO_UDP 17
